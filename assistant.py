@@ -10,6 +10,7 @@ Usage:
 
 import os
 import sys
+import json
 import subprocess
 import threading
 import time
@@ -26,6 +27,7 @@ load_dotenv()
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
+SETTINGS_FILE   = "settings.json"
 WHISPER_MODEL   = "mlx-community/whisper-large-v3-mlx"  # change to whisper-small-mlx for faster/lighter
 TTS_MODEL       = "mlx-community/Kokoro-82M-bf16"
 TTS_VOICE       = "af_heart"          # American female, natural tone
@@ -47,16 +49,31 @@ SYSTEM_PROMPT = (
     "No matter what language user speaking, reply in English. "
 )
 
+# ── Settings persistence ──────────────────────────────────────────────────────
+
+def load_settings() -> dict:
+    try:
+        with open(SETTINGS_FILE) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+def save_settings():
+    with open(SETTINGS_FILE, "w") as f:
+        json.dump({
+            "model_idx":         _model_idx,
+            "tts_idx":           _tts_idx,
+            "continue_speaking": _continue_speaking,
+        }, f, indent=2)
+
 # ── Startup ───────────────────────────────────────────────────────────────────
 
 api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:
     sys.exit("Error: GOOGLE_API_KEY not set. Copy .env.example to .env and add your key.")
 
-print(f"Initialising Gemini (model: {MODELS[0]})...")
+print(f"Initialising Gemini (model: {MODELS[_model_idx]})...")
 client = genai.Client(api_key=api_key)
-
-_model_idx = 0
 
 def _new_chat(model_id: str):
     return client.chats.create(
@@ -70,12 +87,15 @@ print("Whisper and Kokoro will load on first use.\n")
 
 # ── Audio helpers ─────────────────────────────────────────────────────────────
 
+_settings = load_settings()
+
 _audio_chunks: list = []
 _is_recording: bool = False
 _cancel = threading.Event()        # set by Escape to abort the current pipeline
-_tts_idx: int = 0
+_model_idx: int = min(_settings.get("model_idx", 0), len(MODELS) - 1)
+_tts_idx: int = min(_settings.get("tts_idx", 0), len(TTS_BACKENDS) - 1)
 _tts_model = None                  # lazy-loaded on first Kokoro use
-_continue_speaking: bool = False   # auto-restart recording after TTS finishes
+_continue_speaking: bool = _settings.get("continue_speaking", False)
 
 
 def _mic_callback(indata, frames, time_info, status):
@@ -175,14 +195,15 @@ def process():
 def rotate_tts():
     global _tts_idx
     _tts_idx = (_tts_idx + 1) % len(TTS_BACKENDS)
+    save_settings()
     print(f"TTS → {TTS_BACKENDS[_tts_idx]}\n")
 
 
 def toggle_continue_speaking():
     global _continue_speaking
     _continue_speaking = not _continue_speaking
-    state = "ON" if _continue_speaking else "OFF"
-    print(f"Continue speaking → {state}\n")
+    save_settings()
+    print(f"Continue speaking → {'on' if _continue_speaking else 'off'}\n")
 
 
 def rotate_model():
@@ -190,6 +211,7 @@ def rotate_model():
     _model_idx = (_model_idx + 1) % len(MODELS)
     model_id = MODELS[_model_idx]
     chat = _new_chat(model_id)
+    save_settings()
     print(f"Model → {model_id}\n")
 
 
