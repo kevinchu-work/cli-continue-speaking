@@ -35,7 +35,7 @@ TTS_VOICE       = "af_heart"          # American female, natural tone
 TTS_SPEED       = 1.0
 TTS_SAMPLE_RATE = 24000               # Kokoro outputs at 24 kHz
 TTS_BACKENDS    = ["kokoro", "say"]   # Ctrl+T to toggle at runtime
-SAY_VOICES      = ["Samantha", "Daniel", "Karen", "Moira"]  # Ctrl+V to cycle (say only)
+SAY_VOICES      = ["Ava", "Samantha", "Daniel", "Karen", "Moira"]  # Ctrl+V to cycle (say only)
 MODELS = [
     "gemma-4-26b-a4b-it",   # MoE — fast (only 4B active params)
     "gemma-4-31b-it",       # Dense — more capable
