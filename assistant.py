@@ -30,7 +30,10 @@ TTS_MODEL       = "mlx-community/Kokoro-82M-bf16"
 TTS_VOICE       = "af_heart"          # American female, natural tone
 TTS_SPEED       = 1.0
 TTS_SAMPLE_RATE = 24000               # Kokoro outputs at 24 kHz
-GEMINI_MODEL    = "gemini-2.0-flash"
+MODELS = [
+    "gemma-4-26b-a4b-it",   # MoE — fast (only 4B active params)
+    "gemma-4-31b-it",       # Dense — more capable
+]
 MIC_SAMPLE_RATE = 16000               # Whisper expects 16 kHz
 MIN_RECORD_SECS = 0.4                 # ignore recordings shorter than this
 
@@ -47,12 +50,18 @@ api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:
     sys.exit("Error: GOOGLE_API_KEY not set. Copy .env.example to .env and add your key.")
 
-print("Initialising Gemini...")
+print(f"Initialising Gemini (model: {MODELS[0]})...")
 client = genai.Client(api_key=api_key)
-chat = client.chats.create(
-    model=GEMINI_MODEL,
-    config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
-)
+
+_model_idx = 0
+
+def _new_chat(model_id: str):
+    return client.chats.create(
+        model=model_id,
+        config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
+    )
+
+chat = _new_chat(MODELS[_model_idx])
 
 print("Loading Kokoro TTS model (first run downloads ~330 MB)...")
 tts_model = load_tts(TTS_MODEL)
@@ -137,17 +146,34 @@ def process():
     speak(reply)
 
 
+# ── Model rotation ────────────────────────────────────────────────────────────
+
+def rotate_model():
+    global chat, _model_idx
+    _model_idx = (_model_idx + 1) % len(MODELS)
+    model_id = MODELS[_model_idx]
+    chat = _new_chat(model_id)
+    print(f"Model → {model_id}\n")
+
+
 # ── Main loop ─────────────────────────────────────────────────────────────────
 
 def main():
     global _is_recording, _audio_chunks
 
-    space_down  = threading.Event()
-    space_up    = threading.Event()
+    space_down   = threading.Event()
+    space_up     = threading.Event()
+    _ctrl_held   = False
 
     def on_press(key):
+        nonlocal _ctrl_held
         global _is_recording, _audio_chunks
-        if key == kb.Key.space and not _is_recording:
+
+        if key in (kb.Key.ctrl_l, kb.Key.ctrl_r):
+            _ctrl_held = True
+        elif key == kb.Key.tab and _ctrl_held:
+            rotate_model()
+        elif key == kb.Key.space and not _is_recording:
             _is_recording = True
             _audio_chunks = []
             space_down.set()
@@ -163,8 +189,12 @@ def main():
             print("Cancelled.\n")
 
     def on_release(key):
+        nonlocal _ctrl_held
         global _is_recording
-        if key == kb.Key.space and _is_recording:
+
+        if key in (kb.Key.ctrl_l, kb.Key.ctrl_r):
+            _ctrl_held = False
+        elif key == kb.Key.space and _is_recording:
             _is_recording = False
             space_up.set()
 
@@ -176,7 +206,8 @@ def main():
     )
 
     print("=== Voice Assistant Ready ===")
-    print("Hold SPACE to speak, release to send.  ESC to cancel.  Ctrl+C to quit.\n")
+    print(f"Model: {MODELS[_model_idx]}")
+    print("Hold SPACE to speak, release to send.  ESC to cancel.  Ctrl+Tab to switch model.  Ctrl+C to quit.\n")
 
     with stream, kb.Listener(on_press=on_press, on_release=on_release):
         try:
