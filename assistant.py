@@ -75,6 +75,7 @@ _is_recording: bool = False
 _cancel = threading.Event()        # set by Escape to abort the current pipeline
 _tts_idx: int = 0
 _tts_model = None                  # lazy-loaded on first Kokoro use
+_continue_speaking: bool = False   # auto-restart recording after TTS finishes
 
 
 def _mic_callback(indata, frames, time_info, status):
@@ -177,6 +178,13 @@ def rotate_tts():
     print(f"TTS → {TTS_BACKENDS[_tts_idx]}\n")
 
 
+def toggle_continue_speaking():
+    global _continue_speaking
+    _continue_speaking = not _continue_speaking
+    state = "ON" if _continue_speaking else "OFF"
+    print(f"Continue speaking → {state}\n")
+
+
 def rotate_model():
     global chat, _model_idx
     _model_idx = (_model_idx + 1) % len(MODELS)
@@ -202,8 +210,10 @@ def main():
             _ctrl_held = True
         elif key == kb.Key.tab and _ctrl_held:
             rotate_model()
-        elif key == kb.Key.t and _ctrl_held:
+        elif getattr(key, 'char', None) == 't' and _ctrl_held:
             rotate_tts()
+        elif getattr(key, 'char', None) == 'k' and _ctrl_held:
+            toggle_continue_speaking()
         elif key == kb.Key.space:
             if not _is_recording:
                 _is_recording = True
@@ -238,18 +248,30 @@ def main():
     )
 
     print("=== Voice Assistant Ready ===")
-    print(f"Model: {MODELS[_model_idx]}  |  TTS: {TTS_BACKENDS[_tts_idx]}")
-    print("SPACE to start/stop recording (auto-sends).  ESC to cancel.  Ctrl+Tab to switch model.  Ctrl+T to switch TTS.  Ctrl+C to quit.\n")
+    print(f"Model: {MODELS[_model_idx]}  |  TTS: {TTS_BACKENDS[_tts_idx]}  |  Continue: {'ON' if _continue_speaking else 'OFF'}")
+    print("SPACE to start/stop.  ESC to cancel.  Ctrl+Tab model.  Ctrl+T TTS.  Ctrl+K continue speaking.  Ctrl+C quit.\n")
 
     with stream, kb.Listener(on_press=on_press, on_release=on_release):
         try:
+            _auto_record = False
             while True:
-                space_down.wait()
-                space_down.clear()
+                if _auto_record:
+                    _is_recording = True
+                    _audio_chunks = []
+                    _auto_record = False
+                    print("🎙  Recording... (press SPACE to send)")
+                else:
+                    space_down.wait()
+                    space_down.clear()
+
                 space_up.wait()
                 space_up.clear()
+
                 if not _cancel.is_set():
                     process()
+                    _auto_record = _continue_speaking and not _cancel.is_set()
+                else:
+                    _auto_record = False
         except KeyboardInterrupt:
             print("\nGoodbye!")
 
