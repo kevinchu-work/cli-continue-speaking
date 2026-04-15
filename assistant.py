@@ -177,7 +177,10 @@ def main():
             _is_recording = True
             _audio_chunks = []
             space_down.set()
-            print("🎙  Recording... (release SPACE to send)")
+            print("🎙  Recording... (press ENTER to send)")
+        elif key == kb.Key.enter and _is_recording:
+            _is_recording = False
+            space_up.set()
         elif key == kb.Key.esc:
             # Cancel wherever we are: recording, transcribing, waiting for LLM, or speaking
             if _is_recording:
@@ -194,9 +197,6 @@ def main():
 
         if key in (kb.Key.ctrl_l, kb.Key.ctrl_r):
             _ctrl_held = False
-        elif key == kb.Key.space and _is_recording:
-            _is_recording = False
-            space_up.set()
 
     stream = sd.InputStream(
         samplerate=MIC_SAMPLE_RATE,
@@ -207,7 +207,7 @@ def main():
 
     print("=== Voice Assistant Ready ===")
     print(f"Model: {MODELS[_model_idx]}")
-    print("Hold SPACE to speak, release to send.  ESC to cancel.  Ctrl+Tab to switch model.  Ctrl+C to quit.\n")
+    print("SPACE to start recording, ENTER to send.  ESC to cancel.  Ctrl+Tab to switch model.  Ctrl+C to quit.\n")
 
     with stream, kb.Listener(on_press=on_press, on_release=on_release):
         try:
