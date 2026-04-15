@@ -66,6 +66,18 @@ def save_settings():
             "continue_speaking": _continue_speaking,
         }, f, indent=2)
 
+# ── State ─────────────────────────────────────────────────────────────────────
+
+_settings = load_settings()
+
+_audio_chunks: list = []
+_is_recording: bool = False
+_cancel = threading.Event()        # set by Escape to abort the current pipeline
+_model_idx: int = min(_settings.get("model_idx", 0), len(MODELS) - 1)
+_tts_idx: int = min(_settings.get("tts_idx", 0), len(TTS_BACKENDS) - 1)
+_tts_model = None                  # lazy-loaded on first Kokoro use
+_continue_speaking: bool = _settings.get("continue_speaking", False)
+
 # ── Startup ───────────────────────────────────────────────────────────────────
 
 api_key = os.environ.get("GOOGLE_API_KEY")
@@ -86,16 +98,6 @@ chat = _new_chat(MODELS[_model_idx])
 print("Whisper and Kokoro will load on first use.\n")
 
 # ── Audio helpers ─────────────────────────────────────────────────────────────
-
-_settings = load_settings()
-
-_audio_chunks: list = []
-_is_recording: bool = False
-_cancel = threading.Event()        # set by Escape to abort the current pipeline
-_model_idx: int = min(_settings.get("model_idx", 0), len(MODELS) - 1)
-_tts_idx: int = min(_settings.get("tts_idx", 0), len(TTS_BACKENDS) - 1)
-_tts_model = None                  # lazy-loaded on first Kokoro use
-_continue_speaking: bool = _settings.get("continue_speaking", False)
 
 
 def _mic_callback(indata, frames, time_info, status):
