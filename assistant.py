@@ -173,14 +173,15 @@ def main():
             _ctrl_held = True
         elif key == kb.Key.tab and _ctrl_held:
             rotate_model()
-        elif key == kb.Key.space and not _is_recording:
-            _is_recording = True
-            _audio_chunks = []
-            space_down.set()
-            print("🎙  Recording... (press ENTER to send)")
-        elif key == kb.Key.enter and _is_recording:
-            _is_recording = False
-            space_up.set()
+        elif key == kb.Key.space:
+            if not _is_recording:
+                _is_recording = True
+                _audio_chunks = []
+                space_down.set()
+                print("🎙  Recording... (press SPACE again to send)")
+            else:
+                _is_recording = False
+                space_up.set()
         elif key == kb.Key.esc:
             # Cancel wherever we are: recording, transcribing, waiting for LLM, or speaking
             if _is_recording:
@@ -207,7 +208,7 @@ def main():
 
     print("=== Voice Assistant Ready ===")
     print(f"Model: {MODELS[_model_idx]}")
-    print("SPACE to start recording, ENTER to send.  ESC to cancel.  Ctrl+Tab to switch model.  Ctrl+C to quit.\n")
+    print("SPACE to start/stop recording (auto-sends).  ESC to cancel.  Ctrl+Tab to switch model.  Ctrl+C to quit.\n")
 
     with stream, kb.Listener(on_press=on_press, on_release=on_release):
         try:
