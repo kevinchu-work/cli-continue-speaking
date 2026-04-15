@@ -210,7 +210,7 @@ def rotate_tts():
 
 def adjust_tts_speed(delta: float):
     global _tts_speed
-    _tts_speed = round(max(0.5, min(2.0, _tts_speed + delta)), 1)
+    _tts_speed = round(max(0.5, min(2.0, _tts_speed + delta)), 2)
     save_settings()
     print(f"Speed → {_tts_speed}x\n")
 
@@ -268,9 +268,9 @@ def main():
                 space_up.set()
                 print("Recording discarded.\n")
         elif key == kb.Key.up and _ctrl_held:
-            adjust_tts_speed(+0.1)
+            adjust_tts_speed(+0.05)
         elif key == kb.Key.down and _ctrl_held:
-            adjust_tts_speed(-0.1)
+            adjust_tts_speed(-0.05)
         elif getattr(key, 'char', None) == 'q' and _ctrl_held:
             os.kill(os.getpid(), signal.SIGINT)
         elif getattr(key, 'char', None) == 'v' and _ctrl_held:
