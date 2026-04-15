@@ -10,6 +10,7 @@ Usage:
 
 import os
 import sys
+import subprocess
 import threading
 import time
 import numpy as np
@@ -30,6 +31,7 @@ TTS_MODEL       = "mlx-community/Kokoro-82M-bf16"
 TTS_VOICE       = "af_heart"          # American female, natural tone
 TTS_SPEED       = 1.0
 TTS_SAMPLE_RATE = 24000               # Kokoro outputs at 24 kHz
+TTS_BACKENDS    = ["kokoro", "say"]   # Ctrl+T to toggle at runtime
 MODELS = [
     "gemma-4-26b-a4b-it",   # MoE — fast (only 4B active params)
     "gemma-4-31b-it",       # Dense — more capable
@@ -42,6 +44,7 @@ SYSTEM_PROMPT = (
     "Keep your responses concise and conversational — they will be spoken aloud. "
     "Do not use markdown, bullet points, asterisks, or any special formatting. "
     "Speak naturally as if having a conversation."
+    "No matter what language user speaking, reply in English. "
 )
 
 # ── Startup ───────────────────────────────────────────────────────────────────
@@ -63,16 +66,15 @@ def _new_chat(model_id: str):
 
 chat = _new_chat(MODELS[_model_idx])
 
-print("Loading Kokoro TTS model (first run downloads ~330 MB)...")
-tts_model = load_tts(TTS_MODEL)
-
-print("Whisper will load on first transcription.\n")
+print("Whisper and Kokoro will load on first use.\n")
 
 # ── Audio helpers ─────────────────────────────────────────────────────────────
 
 _audio_chunks: list = []
 _is_recording: bool = False
 _cancel = threading.Event()        # set by Escape to abort the current pipeline
+_tts_idx: int = 0
+_tts_model = None                  # lazy-loaded on first Kokoro use
 
 
 def _mic_callback(indata, frames, time_info, status):
@@ -81,24 +83,45 @@ def _mic_callback(indata, frames, time_info, status):
         _audio_chunks.append(indata.copy())
 
 
-def speak(text: str):
-    """Convert text to speech via Kokoro and play through speakers."""
+def _get_tts_model():
+    global _tts_model
+    if _tts_model is None:
+        print("Loading Kokoro TTS model (first run downloads ~330 MB)...")
+        _tts_model = load_tts(TTS_MODEL)
+    return _tts_model
+
+
+def _speak_kokoro(text: str):
     parts = []
-    for chunk in tts_model.generate(text, voice=TTS_VOICE, speed=TTS_SPEED, lang_code="a"):
+    for chunk in _get_tts_model().generate(text, voice=TTS_VOICE, speed=TTS_SPEED, lang_code="a"):
         if _cancel.is_set():
             return
         parts.append(chunk.audio)
     if parts and not _cancel.is_set():
         audio = np.concatenate(parts).astype(np.float32)
         sd.play(audio, samplerate=TTS_SAMPLE_RATE)
-        # Poll so Escape can cut playback short
-        duration = len(audio) / TTS_SAMPLE_RATE
-        deadline = time.monotonic() + duration
+        deadline = time.monotonic() + len(audio) / TTS_SAMPLE_RATE
         while time.monotonic() < deadline:
             if _cancel.is_set():
                 sd.stop()
                 return
             time.sleep(0.05)
+
+
+def _speak_say(text: str):
+    proc = subprocess.Popen(["say", text])
+    while proc.poll() is None:
+        if _cancel.is_set():
+            proc.terminate()
+            return
+        time.sleep(0.05)
+
+
+def speak(text: str):
+    if TTS_BACKENDS[_tts_idx] == "kokoro":
+        _speak_kokoro(text)
+    else:
+        _speak_say(text)
 
 
 # ── Core pipeline ─────────────────────────────────────────────────────────────
@@ -146,7 +169,13 @@ def process():
     speak(reply)
 
 
-# ── Model rotation ────────────────────────────────────────────────────────────
+# ── Model / TTS rotation ──────────────────────────────────────────────────────
+
+def rotate_tts():
+    global _tts_idx
+    _tts_idx = (_tts_idx + 1) % len(TTS_BACKENDS)
+    print(f"TTS → {TTS_BACKENDS[_tts_idx]}\n")
+
 
 def rotate_model():
     global chat, _model_idx
@@ -173,6 +202,8 @@ def main():
             _ctrl_held = True
         elif key == kb.Key.tab and _ctrl_held:
             rotate_model()
+        elif key == kb.Key.t and _ctrl_held:
+            rotate_tts()
         elif key == kb.Key.space:
             if not _is_recording:
                 _is_recording = True
@@ -207,8 +238,8 @@ def main():
     )
 
     print("=== Voice Assistant Ready ===")
-    print(f"Model: {MODELS[_model_idx]}")
-    print("SPACE to start/stop recording (auto-sends).  ESC to cancel.  Ctrl+Tab to switch model.  Ctrl+C to quit.\n")
+    print(f"Model: {MODELS[_model_idx]}  |  TTS: {TTS_BACKENDS[_tts_idx]}")
+    print("SPACE to start/stop recording (auto-sends).  ESC to cancel.  Ctrl+Tab to switch model.  Ctrl+T to switch TTS.  Ctrl+C to quit.\n")
 
     with stream, kb.Listener(on_press=on_press, on_release=on_release):
         try:
