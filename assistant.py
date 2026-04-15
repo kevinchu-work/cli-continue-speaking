@@ -48,7 +48,7 @@ SYSTEM_PROMPT = (
     "Keep your responses concise and conversational — they will be spoken aloud. "
     "Do not use markdown, bullet points, asterisks, or any special formatting. "
     "Speak naturally as if having a conversation."
-    "No matter what language user speaking, reply in English. "
+    "Always reply in English. "
 )
 
 # ── Settings persistence ──────────────────────────────────────────────────────
@@ -66,6 +66,7 @@ def save_settings():
             "model_idx":         _model_idx,
             "tts_idx":           _tts_idx,
             "say_voice_idx":     _say_voice_idx,
+            "tts_speed":         _tts_speed,
             "continue_speaking": _continue_speaking,
         }, f, indent=2)
 
@@ -80,6 +81,7 @@ _model_idx: int = min(_settings.get("model_idx", 0), len(MODELS) - 1)
 _tts_idx: int = min(_settings.get("tts_idx", 0), len(TTS_BACKENDS) - 1)
 _say_voice_idx: int = min(_settings.get("say_voice_idx", 0), len(SAY_VOICES) - 1)
 _tts_model = None                  # lazy-loaded on first Kokoro use
+_tts_speed: float = round(max(0.5, min(2.0, _settings.get("tts_speed", 1.0))), 1)
 _continue_speaking: bool = _settings.get("continue_speaking", False)
 
 # ── Startup ───────────────────────────────────────────────────────────────────
@@ -120,7 +122,7 @@ def _get_tts_model():
 
 def _speak_kokoro(text: str):
     parts = []
-    for chunk in _get_tts_model().generate(text, voice=TTS_VOICE, speed=TTS_SPEED, lang_code="a"):
+    for chunk in _get_tts_model().generate(text, voice=TTS_VOICE, speed=_tts_speed, lang_code="a"):
         if _cancel.is_set():
             return
         parts.append(chunk.audio)
@@ -136,7 +138,8 @@ def _speak_kokoro(text: str):
 
 
 def _speak_say(text: str):
-    proc = subprocess.Popen(["say", "-v", SAY_VOICES[_say_voice_idx], text])
+    wpm = int(175 * _tts_speed)   # 175 WPM is macOS default
+    proc = subprocess.Popen(["say", "-v", SAY_VOICES[_say_voice_idx], "-r", str(wpm), text])
     while proc.poll() is None:
         if _cancel.is_set():
             proc.terminate()
@@ -205,6 +208,13 @@ def rotate_tts():
     print(f"TTS → {TTS_BACKENDS[_tts_idx]}\n")
 
 
+def adjust_tts_speed(delta: float):
+    global _tts_speed
+    _tts_speed = round(max(0.5, min(2.0, _tts_speed + delta)), 1)
+    save_settings()
+    print(f"Speed → {_tts_speed}x\n")
+
+
 def rotate_say_voice():
     global _say_voice_idx
     _say_voice_idx = (_say_voice_idx + 1) % len(SAY_VOICES)
@@ -257,6 +267,10 @@ def main():
                 sd.stop()
                 space_up.set()
                 print("Recording discarded.\n")
+        elif key == kb.Key.up and _ctrl_held:
+            adjust_tts_speed(+0.1)
+        elif key == kb.Key.down and _ctrl_held:
+            adjust_tts_speed(-0.1)
         elif getattr(key, 'char', None) == 'q' and _ctrl_held:
             os.kill(os.getpid(), signal.SIGINT)
         elif getattr(key, 'char', None) == 'v' and _ctrl_held:
@@ -305,6 +319,7 @@ def main():
     print("└─────────────────────────────────────┘")
     print(f"  Model      [ctrl+tab]    {MODELS[_model_idx]}")
     print(f"  TTS        [ctrl+t,v]    {tts_label}")
+    print(f"  Speed      [ctrl+↑↓]     {_tts_speed}x")
     print(f"  Continue   [ctrl+k]      {'on' if _continue_speaking else 'off'}")
     print()
     print(f"  space      start / stop recording")
