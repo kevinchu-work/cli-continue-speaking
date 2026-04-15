@@ -48,7 +48,7 @@ SYSTEM_PROMPT = (
     "Keep your responses concise and conversational — they will be spoken aloud. "
     "Do not use markdown, bullet points, asterisks, or any special formatting. "
     "Speak naturally as if having a conversation."
-    # "No matter what language user speaking, reply in English. "
+    "No matter what language user speaking, reply in English. "
 )
 
 # ── Settings persistence ──────────────────────────────────────────────────────
@@ -249,6 +249,14 @@ def main():
             rotate_tts()
         elif getattr(key, 'char', None) == 'k' and _ctrl_held:
             toggle_continue_speaking()
+            # If we just turned it off mid-recording, discard and don't send
+            if not _continue_speaking and _is_recording:
+                _is_recording = False
+                _audio_chunks = []
+                _cancel.set()
+                sd.stop()
+                space_up.set()
+                print("Recording discarded.\n")
         elif getattr(key, 'char', None) == 'q' and _ctrl_held:
             os.kill(os.getpid(), signal.SIGINT)
         elif getattr(key, 'char', None) == 'v' and _ctrl_held:
@@ -295,9 +303,9 @@ def main():
     print("\n┌─────────────────────────────────────┐")
     print("│        Voice Assistant Ready        │")
     print("└─────────────────────────────────────┘")
-    print(f"  Model      {MODELS[_model_idx]}")     [ctrl+tab]
-    print(f"  TTS        {tts_label}")              [ctrl+t] [ctrl+v]
-    print(f"  Continue   {'on' if _continue_speaking else 'off'}")      [ctrl+k]
+    print(f"  Model    [ctrl+tab]    {MODELS[_model_idx]}")
+    print(f"  TTS      [ctrl+t,v]    {tts_label}")
+    print(f"  Continue [ctrl+k]      {'on' if _continue_speaking else 'off'}")
     print()
     print("  space      start / stop recording")
     print("  esc        cancel")
