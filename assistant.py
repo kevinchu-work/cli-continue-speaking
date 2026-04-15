@@ -247,9 +247,20 @@ def main():
         callback=_mic_callback,
     )
 
-    print("=== Voice Assistant Ready ===")
-    print(f"Model: {MODELS[_model_idx]}  |  TTS: {TTS_BACKENDS[_tts_idx]}  |  Continue: {'ON' if _continue_speaking else 'OFF'}")
-    print("SPACE to start/stop.  ESC to cancel.  Ctrl+Tab model.  Ctrl+T TTS.  Ctrl+K continue speaking.  Ctrl+C quit.\n")
+    print("\n┌─────────────────────────────────────┐")
+    print("│        Voice Assistant Ready        │")
+    print("└─────────────────────────────────────┘")
+    print(f"  Model      {MODELS[_model_idx]}")
+    print(f"  TTS        {TTS_BACKENDS[_tts_idx]}")
+    print(f"  Continue   {'on' if _continue_speaking else 'off'}")
+    print()
+    print("  space      start / stop recording")
+    print("  esc        cancel")
+    print("  ctrl+tab   switch model")
+    print("  ctrl+t     switch TTS")
+    print("  ctrl+k     toggle continue speaking")
+    print("  ctrl+c     quit")
+    print()
 
     with stream, kb.Listener(on_press=on_press, on_release=on_release):
         try:
