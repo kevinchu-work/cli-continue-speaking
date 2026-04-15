@@ -34,6 +34,7 @@ TTS_VOICE       = "af_heart"          # American female, natural tone
 TTS_SPEED       = 1.0
 TTS_SAMPLE_RATE = 24000               # Kokoro outputs at 24 kHz
 TTS_BACKENDS    = ["kokoro", "say"]   # Ctrl+T to toggle at runtime
+SAY_VOICES      = ["Samantha", "Daniel", "Karen", "Moira"]  # Ctrl+V to cycle (say only)
 MODELS = [
     "gemma-4-26b-a4b-it",   # MoE — fast (only 4B active params)
     "gemma-4-31b-it",       # Dense — more capable
@@ -46,7 +47,7 @@ SYSTEM_PROMPT = (
     "Keep your responses concise and conversational — they will be spoken aloud. "
     "Do not use markdown, bullet points, asterisks, or any special formatting. "
     "Speak naturally as if having a conversation."
-    "No matter what language user speaking, reply in English. "
+    # "No matter what language user speaking, reply in English. "
 )
 
 # ── Settings persistence ──────────────────────────────────────────────────────
@@ -63,6 +64,7 @@ def save_settings():
         json.dump({
             "model_idx":         _model_idx,
             "tts_idx":           _tts_idx,
+            "say_voice_idx":     _say_voice_idx,
             "continue_speaking": _continue_speaking,
         }, f, indent=2)
 
@@ -75,6 +77,7 @@ _is_recording: bool = False
 _cancel = threading.Event()        # set by Escape to abort the current pipeline
 _model_idx: int = min(_settings.get("model_idx", 0), len(MODELS) - 1)
 _tts_idx: int = min(_settings.get("tts_idx", 0), len(TTS_BACKENDS) - 1)
+_say_voice_idx: int = min(_settings.get("say_voice_idx", 0), len(SAY_VOICES) - 1)
 _tts_model = None                  # lazy-loaded on first Kokoro use
 _continue_speaking: bool = _settings.get("continue_speaking", False)
 
@@ -132,7 +135,7 @@ def _speak_kokoro(text: str):
 
 
 def _speak_say(text: str):
-    proc = subprocess.Popen(["say", text])
+    proc = subprocess.Popen(["say", "-v", SAY_VOICES[_say_voice_idx], text])
     while proc.poll() is None:
         if _cancel.is_set():
             proc.terminate()
@@ -201,6 +204,13 @@ def rotate_tts():
     print(f"TTS → {TTS_BACKENDS[_tts_idx]}\n")
 
 
+def rotate_say_voice():
+    global _say_voice_idx
+    _say_voice_idx = (_say_voice_idx + 1) % len(SAY_VOICES)
+    save_settings()
+    print(f"say voice → {SAY_VOICES[_say_voice_idx]}\n")
+
+
 def toggle_continue_speaking():
     global _continue_speaking
     _continue_speaking = not _continue_speaking
@@ -238,6 +248,11 @@ def main():
             rotate_tts()
         elif getattr(key, 'char', None) == 'k' and _ctrl_held:
             toggle_continue_speaking()
+        elif getattr(key, 'char', None) == 'v' and _ctrl_held:
+            if TTS_BACKENDS[_tts_idx] == "say":
+                rotate_say_voice()
+            else:
+                print("(Ctrl+V only applies to say backend)\n")
         elif key == kb.Key.space:
             if not _is_recording:
                 _is_recording = True
@@ -271,17 +286,21 @@ def main():
         callback=_mic_callback,
     )
 
+    tts_label = TTS_BACKENDS[_tts_idx]
+    if tts_label == "say":
+        tts_label += f"  ({SAY_VOICES[_say_voice_idx]})"
     print("\n┌─────────────────────────────────────┐")
     print("│        Voice Assistant Ready        │")
     print("└─────────────────────────────────────┘")
     print(f"  Model      {MODELS[_model_idx]}")
-    print(f"  TTS        {TTS_BACKENDS[_tts_idx]}")
+    print(f"  TTS        {tts_label}")
     print(f"  Continue   {'on' if _continue_speaking else 'off'}")
     print()
     print("  space      start / stop recording")
     print("  esc        cancel")
     print("  ctrl+tab   switch model")
     print("  ctrl+t     switch TTS")
+    print("  ctrl+v     switch say voice  (say only)")
     print("  ctrl+k     toggle continue speaking")
     print("  ctrl+c     quit")
     print()
