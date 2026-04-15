@@ -10,6 +10,7 @@ Usage:
 
 import os
 import sys
+import signal
 import json
 import subprocess
 import threading
@@ -248,6 +249,8 @@ def main():
             rotate_tts()
         elif getattr(key, 'char', None) == 'k' and _ctrl_held:
             toggle_continue_speaking()
+        elif getattr(key, 'char', None) == 'q' and _ctrl_held:
+            os.kill(os.getpid(), signal.SIGINT)
         elif getattr(key, 'char', None) == 'v' and _ctrl_held:
             if TTS_BACKENDS[_tts_idx] == "say":
                 rotate_say_voice()
@@ -292,17 +295,13 @@ def main():
     print("\n┌─────────────────────────────────────┐")
     print("│        Voice Assistant Ready        │")
     print("└─────────────────────────────────────┘")
-    print(f"  Model      {MODELS[_model_idx]}")
-    print(f"  TTS        {tts_label}")
-    print(f"  Continue   {'on' if _continue_speaking else 'off'}")
+    print(f"  Model      {MODELS[_model_idx]}")     [ctrl+tab]
+    print(f"  TTS        {tts_label}")              [ctrl+t] [ctrl+v]
+    print(f"  Continue   {'on' if _continue_speaking else 'off'}")      [ctrl+k]
     print()
     print("  space      start / stop recording")
     print("  esc        cancel")
-    print("  ctrl+tab   switch model")
-    print("  ctrl+t     switch TTS")
-    print("  ctrl+v     switch say voice  (say only)")
-    print("  ctrl+k     toggle continue speaking")
-    print("  ctrl+c     quit")
+    print("  ctrl+q     quit")
     print()
 
     with stream, kb.Listener(on_press=on_press, on_release=on_release):
