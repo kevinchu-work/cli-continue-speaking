@@ -73,5 +73,11 @@ Should print `True`.
 **`Failed to post to Discord: HTTP Error 401`** — webhook URL is invalid or
 deleted.  Create a new one.
 
+**`HTTP Error 403` with "error code: 1010"** — Cloudflare blocked the
+request because the User-Agent is missing or on a blocklist.  Discord
+requires a UA in the form `DiscordBot (URL, Version)`; the client sets
+this automatically, so if you hit 1010 it usually means you're running an
+outdated copy of `client.py`.
+
 **`HTTP Error 429`** — Discord rate limit (30 requests / minute per webhook).
 Wait a moment and retry.

@@ -22,7 +22,13 @@ def send_discord_message(message: str) -> str:
     req = urllib.request.Request(
         webhook,
         data=payload,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            # Discord's Cloudflare layer blocks the default Python-urllib UA
+            # with error 1010.  Per Discord docs, clients must supply a UA
+            # matching: "DiscordBot (URL, Version)".
+            "User-Agent": "DiscordBot (https://github.com/kevin/v-to-work, 0.1.0)",
+        },
         method="POST",
     )
     try:
