@@ -1,9 +1,6 @@
 """Built-in tools that require no external setup."""
 
-import json
 import subprocess
-import urllib.parse
-import urllib.request
 from datetime import datetime
 
 
@@ -20,20 +17,4 @@ def open_application(app_name: str) -> str:
     return f"Could not open {app_name}: {result.stderr.strip()}"
 
 
-def web_search(query: str) -> str:
-    """Search the web and return a brief answer using DuckDuckGo."""
-    url = "https://api.duckduckgo.com/?" + urllib.parse.urlencode({
-        "q": query, "format": "json", "no_html": "1", "skip_disambig": "1"
-    })
-    try:
-        with urllib.request.urlopen(url, timeout=5) as resp:
-            data = json.loads(resp.read().decode())
-        answer = (data.get("AbstractText")
-                  or data.get("Answer")
-                  or (data.get("RelatedTopics") or [{}])[0].get("Text", ""))
-        return answer or "No direct answer found."
-    except Exception as e:
-        return f"Search failed: {e}"
-
-
-TOOLS = [get_datetime, open_application, web_search]
+TOOLS = [get_datetime, open_application]
