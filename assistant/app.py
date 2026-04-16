@@ -30,9 +30,18 @@ class VoiceAssistant:
         self._audio_chunks: list = []
         self._is_recording: bool = False
 
-        # Preload TTS so the first response plays without a download delay
+        # Preload both models so the first turn runs without any fetch delay
         self._tts.preload()
-        print("Whisper will load on first use.\n")
+        self._preload_whisper()
+
+    # ── Preload ───────────────────────────────────────────────────────────────
+
+    def _preload_whisper(self) -> None:
+        """Warm up the Whisper model with a silent dummy transcription."""
+        print("Loading Whisper model...")
+        silence = np.zeros(MIC_SAMPLE_RATE, dtype=np.float32)  # 1 s of silence
+        mlx_whisper.transcribe(silence, path_or_hf_repo=WHISPER_MODEL)
+        print("All models ready.\n")
 
     # ── Audio ─────────────────────────────────────────────────────────────────
 
