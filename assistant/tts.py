@@ -59,6 +59,11 @@ class TTSEngine:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
+    def preload(self) -> None:
+        """Eagerly load the Kokoro model at startup (no-op for say backend)."""
+        if TTS_BACKENDS[self._settings.tts_idx] == "kokoro":
+            self._get_model()
+
     def speak(self, text: str) -> None:
         if TTS_BACKENDS[self._settings.tts_idx] == "kokoro":
             self._speak_kokoro(text)

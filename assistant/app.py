@@ -2,6 +2,8 @@
 
 import os
 import signal
+import sys
+import termios
 import threading
 import time
 
@@ -28,7 +30,9 @@ class VoiceAssistant:
         self._audio_chunks: list = []
         self._is_recording: bool = False
 
-        print("Whisper and Kokoro will load on first use.\n")
+        # Preload TTS so the first response plays without a download delay
+        self._tts.preload()
+        print("Whisper will load on first use.\n")
 
     # ── Audio ─────────────────────────────────────────────────────────────────
 
@@ -192,29 +196,44 @@ class VoiceAssistant:
 
         self._print_banner()
 
-        with stream, kb.Listener(on_press=on_press, on_release=on_release):
-            try:
-                auto_record = False
-                while True:
-                    if auto_record:
-                        self._is_recording = True
-                        self._audio_chunks = []
-                        auto_record = False
-                        print("🎙  Recording... (press SPACE to send)")
-                    else:
-                        space_down.wait()
-                        space_down.clear()
+        # Disable terminal echo so hotkey escape sequences (^[[1;5A etc.) don't
+        # bleed into the output.  Restore unconditionally on exit.
+        _fd: int | None = None
+        _old_attrs = None
+        if sys.stdin.isatty():
+            _fd = sys.stdin.fileno()
+            _old_attrs = termios.tcgetattr(_fd)
+            new_attrs = list(_old_attrs)
+            new_attrs[3] &= ~termios.ECHO   # clear ECHO flag in c_lflag
+            termios.tcsetattr(_fd, termios.TCSANOW, new_attrs)
 
-                    space_up.wait()
-                    space_up.clear()
+        try:
+            with stream, kb.Listener(on_press=on_press, on_release=on_release):
+                try:
+                    auto_record = False
+                    while True:
+                        if auto_record:
+                            self._is_recording = True
+                            self._audio_chunks = []
+                            auto_record = False
+                            print("🎙  Recording... (press SPACE to send)")
+                        else:
+                            space_down.wait()
+                            space_down.clear()
 
-                    if not self._cancel.is_set():
-                        self._process()
-                        auto_record = self._settings.continue_speaking and not self._cancel.is_set()
-                    else:
-                        auto_record = False
-            except KeyboardInterrupt:
-                print("\nGoodbye!")
+                        space_up.wait()
+                        space_up.clear()
+
+                        if not self._cancel.is_set():
+                            self._process()
+                            auto_record = self._settings.continue_speaking and not self._cancel.is_set()
+                        else:
+                            auto_record = False
+                except KeyboardInterrupt:
+                    print("\nGoodbye!")
+        finally:
+            if _fd is not None and _old_attrs is not None:
+                termios.tcsetattr(_fd, termios.TCSADRAIN, _old_attrs)
 
 
 def main_cli() -> None:
