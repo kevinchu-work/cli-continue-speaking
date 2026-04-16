@@ -12,3 +12,6 @@ dependencies = [
     "numpy",
     "scipy",
 ]
+
+[project.scripts]
+assistant = "main:main"
