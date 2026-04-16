@@ -10,6 +10,7 @@ import time
 import mlx_whisper
 import numpy as np
 import sounddevice as sd
+from google.genai import errors as genai_errors
 from pynput import keyboard as kb
 
 from .config import (
@@ -80,7 +81,19 @@ class VoiceAssistant:
         print(f"done.\nYou: {user_text}")
         print("Thinking...", end=" ", flush=True)
 
-        response = self._llm.send(user_text)
+        try:
+            response = self._llm.send(user_text)
+        except genai_errors.APIError as e:
+            # Transient Gemini/Gemma errors (500, 503, rate limits, etc.) —
+            # report, speak a short apology, keep the loop alive so the user
+            # can simply ask again instead of restarting the program.
+            print(f"failed.\n[LLM error: {e.code} {e.status}]\n")
+            self._tts.speak("Sorry, the model is having a problem. Please try again.")
+            return
+        except Exception as e:
+            print(f"failed.\n[Unexpected error: {e}]\n")
+            self._tts.speak("Sorry, something went wrong.")
+            return
 
         if self._cancel.is_set():
             print("cancelled.\n")
