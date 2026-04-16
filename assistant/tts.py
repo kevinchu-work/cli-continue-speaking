@@ -60,9 +60,20 @@ class TTSEngine:
     # ── Public API ────────────────────────────────────────────────────────────
 
     def preload(self) -> None:
-        """Eagerly load the Kokoro model at startup (no-op for say backend)."""
-        if TTS_BACKENDS[self._settings.tts_idx] == "kokoro":
-            self._get_model()
+        """Eagerly load the Kokoro model and warm up the pipeline at startup.
+
+        Calling load_tts() alone only loads model weights; the language pipeline
+        (KokoroPipeline) is built lazily on the first generate() call, which
+        triggers an extra file fetch.  Running one silent dummy generate() here
+        forces that initialisation up-front so the first real response plays
+        without any delay.  No-op when using the say backend.
+        """
+        if TTS_BACKENDS[self._settings.tts_idx] != "kokoro":
+            return
+        model = self._get_model()
+        # Consume the first chunk only — just enough to build the pipeline
+        for _ in model.generate(".", voice=TTS_VOICE, speed=1.0, lang_code="a"):
+            break
 
     def speak(self, text: str) -> None:
         if TTS_BACKENDS[self._settings.tts_idx] == "kokoro":
