@@ -36,6 +36,6 @@ def load_settings() -> Settings:
         model_idx=min(data.get("model_idx", 0), len(MODELS) - 1),
         tts_idx=min(data.get("tts_idx", 0), len(TTS_BACKENDS) - 1),
         say_voice_idx=min(data.get("say_voice_idx", 0), len(SAY_VOICES) - 1),
-        tts_speed=round(max(0.5, min(2.0, data.get("tts_speed", TTS_SPEED))), 1),
+        tts_speed=round(max(0.5, min(2.0, data.get("tts_speed", TTS_SPEED))), 2),
         continue_speaking=data.get("continue_speaking", False),
     )
