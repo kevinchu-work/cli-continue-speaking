@@ -1,8 +1,10 @@
 # Voice Assistant
 
-Mic → **mlx-whisper** (STT) → **Gemini** (LLM) → **Kokoro** (TTS)
+Mic → **mlx-whisper** (STT) → **Gemma 4 via Gemini API** (LLM, with tool use) → **Kokoro** (TTS)
 
-Runs fully on your Mac. Only the LLM call hits the network.
+STT and TTS run fully on-device. Only the LLM call hits the network.
+
+---
 
 ## Setup
 
@@ -12,41 +14,82 @@ Runs fully on your Mac. Only the LLM call hits the network.
 uv sync
 ```
 
-> `mlx-whisper` and `mlx-audio` will download their models (~1 GB total) on first use.
+> Whisper (~3 GB) and Kokoro (~330 MB) download on first launch and are cached.
 
-**2. Add your Google AI Studio key**
+**2. Configure API keys**
 
 ```bash
 cp .env.example .env
-# edit .env and paste your GOOGLE_API_KEY
+# edit .env — only GOOGLE_API_KEY is required
 ```
 
-Get a free key at [aistudio.google.com](https://aistudio.google.com).
+Grab a free key at [aistudio.google.com](https://aistudio.google.com). Gemma 4 is free-tier and generous.
 
 **3. Run**
 
 ```bash
-uv run assistant.py
+uv run main.py
 ```
+
+First launch preloads both models (~15 s) so every turn after that is instant.
+
+---
 
 ## Usage
 
-| Action | Result |
+| Key | Action |
 |---|---|
-| Hold `Space` | Records your voice |
-| Release `Space` | Sends to Gemini, speaks the reply |
-| `Ctrl+C` | Quit |
+| `space` | Press to start recording; press again to send |
+| `esc` | Cancel current recording / transcription / response |
+| `ctrl+tab` | Rotate LLM model (Gemma 4 26B MoE ↔ 31B Dense) |
+| `ctrl+t` | Toggle TTS backend (Kokoro ↔ macOS `say`) |
+| `ctrl+v` | Cycle `say` voices (Ava, Samantha, Daniel, Karen, Moira) |
+| `ctrl+↑` / `ctrl+↓` | Adjust TTS speed (0.5x – 2.0x, 0.05 step) |
+| `ctrl+k` | Toggle "continue speaking" — auto-records again after each reply |
+| `ctrl+q` | Quit |
 
-## Tuning
+All settings persist to `settings.json` between runs.
 
-Edit the config block at the top of `assistant.py`:
+---
 
-| Variable | Default | Notes |
+## Tools
+
+The LLM can call Python functions to take actions. Tools **auto-register** when their setup is present, so if you haven't configured Gmail the LLM won't try to send email.
+
+| Tool | Setup | Capability |
 |---|---|---|
-| `WHISPER_MODEL` | `whisper-large-v3-mlx` | Swap to `whisper-small-mlx` for faster/lighter |
-| `TTS_VOICE` | `af_heart` | Other voices: `af_bella`, `af_nova`, `am_adam`, `bm_george` |
-| `TTS_SPEED` | `1.0` | Increase for faster speech |
-| `GEMINI_MODEL` | `gemini-2.0-flash` | Swap to `gemini-1.5-pro` for more capable responses |
+| `get_datetime` | none | "What time is it?" |
+| `open_application` | none | "Open Safari" |
+| `web_search` | see [`tools/search/README.md`](assistant/tools/search/README.md) | Current events, weather, prices, news |
+| `send_discord_message` | see [`tools/discord/README.md`](assistant/tools/discord/README.md) | Post to a Discord channel |
+| `send_email` | see [`tools/gmail/README.md`](assistant/tools/gmail/README.md) | Send email via Gmail |
+
+The LLM can chain multiple tool calls in one turn — e.g. *"what time is it then email that to alice@x.com"* runs `get_datetime()` and `send_email(...)` back-to-back.
+
+### Adding your own tool
+
+Each tool is a Python function with a clear docstring. Drop a new folder under `assistant/tools/<name>/` with an `__init__.py` that exports a `TOOLS = [...]` list, and register it in `assistant/tools/__init__.py`. See the existing sub-folders as templates.
+
+---
+
+## Layout
+
+```
+assistant/
+├── config.py     # constants (models, sample rates, prompt)
+├── settings.py   # persisted preferences
+├── llm.py        # Gemini chat client
+├── tts.py        # Kokoro + `say` backends
+├── tools/        # LLM-callable tools (self-contained sub-packages)
+│   ├── core.py
+│   ├── search/
+│   ├── gmail/
+│   └── discord/
+└── app.py        # VoiceAssistant class, keyboard, run loop
+main.py           # entry point
+```
+
+---
 
 ## Pipeline latency (M5, 32 GB)
 
@@ -56,3 +99,5 @@ Edit the config block at the top of `assistant.py`:
 | Gemini API response | ~1–2 s |
 | Kokoro TTS generation | ~0.5 s |
 | **Total per turn** | **~2–4 s** |
+
+Models are preloaded at startup, so the first turn has no extra cost.
