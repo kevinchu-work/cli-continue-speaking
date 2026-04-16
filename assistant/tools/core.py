@@ -1,9 +1,9 @@
-"""LLM-callable tools: datetime, open app, web search."""
+"""Built-in tools that require no external setup."""
 
 import json
 import subprocess
-import urllib.request
 import urllib.parse
+import urllib.request
 from datetime import datetime
 
 
