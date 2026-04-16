@@ -46,5 +46,13 @@ class LLMClient:
         self._chat = self._new_chat()
         print(f"Model → {self.model_name}\n")
 
+    def reset_chat(self) -> None:
+        """Drop conversation history and start a fresh chat session.
+
+        Called after an API error so a failed turn stuck in curated history
+        doesn't poison every subsequent request.
+        """
+        self._chat = self._new_chat()
+
     def send(self, text: str):
         return self._chat.send_message(text)

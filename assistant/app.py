@@ -84,14 +84,18 @@ class VoiceAssistant:
         try:
             response = self._llm.send(user_text)
         except genai_errors.APIError as e:
-            # Transient Gemini/Gemma errors (500, 503, rate limits, etc.) —
-            # report, speak a short apology, keep the loop alive so the user
-            # can simply ask again instead of restarting the program.
-            print(f"failed.\n[LLM error: {e.code} {e.status}]\n")
-            self._tts.speak("Sorry, the model is having a problem. Please try again.")
+            # Transient Gemini/Gemma errors (500, 503, rate limits, etc.).
+            # A failed turn can end up stuck in the chat's curated history
+            # and poison every subsequent send — reset the session so the
+            # next turn starts clean.  Conversation context is lost, which
+            # beats an unusable loop.
+            print(f"failed.\n[LLM error: {e.code} {e.status}] — resetting chat.\n")
+            self._llm.reset_chat()
+            self._tts.speak("Sorry, the model hiccuped. I've reset the chat, please try again.")
             return
         except Exception as e:
-            print(f"failed.\n[Unexpected error: {e}]\n")
+            print(f"failed.\n[Unexpected error: {e}] — resetting chat.\n")
+            self._llm.reset_chat()
             self._tts.speak("Sorry, something went wrong.")
             return
 

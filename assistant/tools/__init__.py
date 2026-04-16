@@ -13,6 +13,6 @@ To add a new tool category:
 from .core import TOOLS as _core_tools
 from .gmail import TOOLS as _gmail_tools
 from .discord import TOOLS as _discord_tools
-from .search import TOOLS as _search_tools
+# from .search import TOOLS as _search_tools   # disabled for now
 
-TOOLS = _core_tools + _gmail_tools + _discord_tools + _search_tools
+TOOLS = _core_tools + _gmail_tools + _discord_tools
