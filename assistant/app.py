@@ -165,6 +165,7 @@ class VoiceAssistant:
                     print("(Ctrl+V only applies to say backend)\n")
             elif key == kb.Key.space:
                 if not self._is_recording:
+                    self._cancel.clear()  # reset any prior cancel before a fresh recording
                     self._is_recording = True
                     self._audio_chunks = []
                     space_down.set()
