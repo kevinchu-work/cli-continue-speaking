@@ -215,3 +215,10 @@ class VoiceAssistant:
                         auto_record = False
             except KeyboardInterrupt:
                 print("\nGoodbye!")
+
+
+def main_cli() -> None:
+    """Entry point for `uv run assistant` / installed script."""
+    from dotenv import load_dotenv
+    load_dotenv()
+    VoiceAssistant().run()
