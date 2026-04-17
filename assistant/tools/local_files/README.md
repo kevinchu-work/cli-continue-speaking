@@ -5,12 +5,14 @@ drafts, journal entries, anything you ask it to "write down" or "save".
 
 | Tool | Env var | Setup | Purpose |
 |---|---|---|---|
-| `write_local_file` | `LOCAL_FILES_DIR` | ~10 s | Write/append text to files inside one folder |
+| `write_local_file` | `LOCAL_FILES_DIR` | ~10 s | Append (default) or overwrite text in one folder |
+| `read_local_file`  | `LOCAL_FILES_DIR` | —      | Read back a previously saved file |
 
 Example voice prompts:
 - *"Save a note that I need to call the plumber tomorrow"*
 - *"Write a haiku about coffee and save it as haiku.txt"*
-- *"Append 'meeting moved to 3pm' to today's journal"*
+- *"What's in my todo list?"* → `read_local_file`
+- *"Start over on shopping.txt with just milk and bread"* → overwrite
 
 ---
 
@@ -36,13 +38,17 @@ Restart the assistant and `write_local_file` becomes available.
   symlinks that escape the folder are rejected.
 - **Sub-folders allowed.** The LLM can organise into `journal/2026-04-17.md`
   etc. — parent directories are created as needed.
-- **Overwrites by default.** The `append` flag exists for additive writes;
-  without it the tool replaces the file's contents.  If that worries you,
-  pick a folder with nothing important in it.
-- **No read, delete, list, or execute.** This tool only writes.  The LLM
-  cannot inspect what's already there, remove files, or run commands
-  against the folder.  If you want read capability, we'd add a separate
-  tool — keeps the surface area small and obvious.
+- **Appends by default.** Writes add to the end of the file; overwrite
+  only happens when the LLM explicitly sets `append=False` in response
+  to a user instruction like "start over" / "replace" / "overwrite".
+  This is deliberately conservative — one phrase like "save this" is
+  extremely unlikely to wipe a file.
+- **No delete, list, or execute.** Read and write are separate tools;
+  there's no way for the LLM to remove files, enumerate the folder,
+  or run commands against it.
+- **Read is UTF-8 text only, capped at 8 KB.** Binary files get refused
+  rather than fed into the LLM as garbled mojibake, and big files are
+  truncated with an explicit marker so nothing is silently dropped.
 
 ---
 

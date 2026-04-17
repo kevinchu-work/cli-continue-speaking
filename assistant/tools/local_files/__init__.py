@@ -13,5 +13,5 @@ load_dotenv()
 TOOLS: list = []
 
 if os.environ.get("LOCAL_FILES_DIR"):
-    from .client import write_local_file
-    TOOLS.append(write_local_file)
+    from .client import read_local_file, write_local_file
+    TOOLS.extend([write_local_file, read_local_file])
