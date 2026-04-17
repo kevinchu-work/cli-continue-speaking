@@ -101,6 +101,54 @@ def append_to_notion(content: str) -> str:
     return f"Appended {len(blocks)} block(s) to Notion."
 
 
+def create_notion_subpage(title: str, content: str = "") -> str:
+    """Create a new sub-page under the configured Notion page.
+
+    Use this when the user asks to "start a new note" / "make a new
+    page" / "create a Notion page for X" — anything that should be its
+    own titled entry rather than appended to the existing journal.
+
+    Args:
+        title: Page title.  Required, non-empty.
+        content: Optional initial body text.  Same splitting rules as
+            ``append_to_notion`` — blank-line-separated paragraphs
+            become separate blocks, and over-long paragraphs are
+            chunked under Notion's 2000-char limit.
+
+    Returns:
+        Confirmation with the new page's URL, or an error.
+    """
+    title = (title or "").strip()
+    if not title:
+        return "Refused: page needs a non-empty title."
+
+    try:
+        parent_id = _page_id()
+    except Exception as e:
+        return f"Notion not configured correctly: {e}"
+
+    body: dict = {
+        "parent": {"type": "page_id", "page_id": parent_id},
+        "properties": {
+            # Sub-pages under a page (not a database) use "title" — a
+            # rich-text array.  Databases would use a named property.
+            "title": {
+                "title": [{"type": "text", "text": {"content": title}}],
+            },
+        },
+    }
+    if content and content.strip():
+        body["children"] = _content_to_blocks(content)
+
+    try:
+        resp = _http("POST", f"{_API}/pages", body)
+    except Exception as e:
+        return f"Failed to create Notion sub-page: {e}"
+
+    url = resp.get("url", "(no url returned)")
+    return f"Created '{title}' → {url}"
+
+
 def read_notion_page() -> str:
     """Read the text content of the configured Notion page.
 

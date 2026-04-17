@@ -13,5 +13,5 @@ load_dotenv()
 TOOLS: list = []
 
 if os.environ.get("NOTION_TOKEN") and os.environ.get("NOTION_PAGE_ID"):
-    from .client import append_to_notion, read_notion_page
-    TOOLS.extend([append_to_notion, read_notion_page])
+    from .client import append_to_notion, create_notion_subpage, read_notion_page
+    TOOLS.extend([append_to_notion, read_notion_page, create_notion_subpage])

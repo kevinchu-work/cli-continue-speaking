@@ -4,16 +4,18 @@ Append notes to one Notion page, and read them back.
 
 | Tool | Env vars | Setup | Purpose |
 |---|---|---|---|
-| `append_to_notion` | `NOTION_TOKEN`, `NOTION_PAGE_ID` | ~3 min | Add text to one pinned page |
-| `read_notion_page` | same | — | Read back the page's current content |
+| `append_to_notion`      | `NOTION_TOKEN`, `NOTION_PAGE_ID` | ~3 min | Add text to the pinned parent page |
+| `read_notion_page`      | same | — | Read back the parent page's current content |
+| `create_notion_subpage` | same | — | Create a new titled sub-page underneath it |
 
 Example voice prompts:
 - *"Save to Notion: don't forget to renew the domain in May"* → append
 - *"What's in my Notion notes?"* → read
-- *"Add a paragraph to my Notion: today I finally fixed the 403 bug"* → append
+- *"Start a new Notion page called 'trip planning' with these ideas..."* → create sub-page
 
-The tool is deliberately scoped to **one page** — simple, predictable,
-and the LLM can't wander into other parts of your workspace.
+The parent page (pinned via `NOTION_PAGE_ID`) is the single target for
+appends and reads.  Sub-pages land beneath it, so your workspace tree
+stays tidy and the LLM can't wander anywhere else.
 
 ---
 
@@ -64,14 +66,15 @@ Restart the assistant and both tools are available.
 
 | Can | Can't |
 |---|---|
-| Append paragraphs to one page | Write to any other page |
-| Split multi-paragraph content into separate blocks | Create sub-pages |
-| Read back page text (paragraphs, headings, lists, to-dos, quotes) | Modify or delete existing blocks |
-| Handle content longer than Notion's 2000-char block limit via chunking | Read images, databases, or embeds (they render as `[type]`) |
-| Follow pagination when reading long pages | Search the workspace |
+| Append paragraphs to the parent page | Write to pages outside the parent's tree |
+| Create titled sub-pages under the parent | Modify or delete existing pages/blocks |
+| Split multi-paragraph content into separate blocks | Read images, databases, or embeds (they render as `[type]`) |
+| Read back page text (paragraphs, headings, lists, to-dos, quotes) | Search the workspace |
+| Handle content longer than Notion's 2000-char block limit via chunking | Read the *sub-pages* you create (only the parent is readable today) |
+| Follow pagination when reading long pages | |
 
-If you later want multi-page support, sub-page creation, or database
-rows, those are all feasible extensions — holler.
+If you later want cross-sub-page reads, database rows, or modify/delete
+operations, those are feasible extensions — holler.
 
 ---
 
