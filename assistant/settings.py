@@ -13,15 +13,17 @@ class Settings:
     say_voice_idx: int = 0
     tts_speed: float = TTS_SPEED
     continue_speaking: bool = False
+    auto_reply_enabled: bool = False
 
     def save(self) -> None:
         with open(SETTINGS_FILE, "w") as f:
             json.dump({
-                "model_idx":         self.model_idx,
-                "tts_idx":           self.tts_idx,
-                "say_voice_idx":     self.say_voice_idx,
-                "tts_speed":         self.tts_speed,
-                "continue_speaking": self.continue_speaking,
+                "model_idx":          self.model_idx,
+                "tts_idx":            self.tts_idx,
+                "say_voice_idx":      self.say_voice_idx,
+                "tts_speed":          self.tts_speed,
+                "continue_speaking":  self.continue_speaking,
+                "auto_reply_enabled": self.auto_reply_enabled,
             }, f, indent=2)
 
 
@@ -38,4 +40,5 @@ def load_settings() -> Settings:
         say_voice_idx=min(data.get("say_voice_idx", 0), len(SAY_VOICES) - 1),
         tts_speed=round(max(0.5, min(2.0, data.get("tts_speed", TTS_SPEED))), 2),
         continue_speaking=data.get("continue_speaking", False),
+        auto_reply_enabled=data.get("auto_reply_enabled", False),
     )

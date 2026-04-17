@@ -56,3 +56,24 @@ class LLMClient:
 
     def send(self, text: str):
         return self._chat.send_message(text)
+
+    def draft_reply(self, incoming: str) -> str:
+        """One-shot draft of a Discord reply to an incoming message.
+
+        Deliberately does NOT use the voice-chat session — auto-replies
+        shouldn't pollute conversational history, and the voice system
+        prompt's "speak aloud, no formatting" rules are wrong here.
+        Returns the bare reply text ready to post.
+        """
+        system = (
+            "You are drafting a short, casual Discord reply on the user's "
+            "behalf.  Write only the reply text — no quotes, no preamble, "
+            "no 'Sure, here's a reply:'.  One or two sentences.  Match the "
+            "tone of the incoming message.  Plain text only — no markdown."
+        )
+        resp = self._client.models.generate_content(
+            model=self.model_name,
+            contents=f"Incoming message:\n{incoming}\n\nYour reply:",
+            config=types.GenerateContentConfig(system_instruction=system),
+        )
+        return (resp.text or "").strip()

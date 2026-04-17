@@ -107,6 +107,42 @@ def _resolve_channel_id() -> str:
     return _cached_channel_id
 
 
+def fetch_raw_messages(limit: int = 10, after: str | None = None) -> list[dict]:
+    """Fetch raw Discord message dicts — newest first from the API.
+
+    Used by both ``read_discord_messages`` (LLM tool) and the auto-reply
+    poller.  Raises on any error — callers decide how to surface it.
+
+    Args:
+        limit: 1–100.
+        after: Discord snowflake ID; only return messages strictly newer
+            than this.  Used by the poller to get just what arrived since
+            the last tick.
+    """
+    token = os.environ["DISCORD_BOT_TOKEN"]
+    channel_id = _resolve_channel_id()
+    n = max(1, min(100, int(limit)))
+    url = f"{_API}/channels/{channel_id}/messages?limit={n}"
+    if after:
+        url += f"&after={after}"
+    req = urllib.request.Request(
+        url,
+        headers={"Authorization": f"Bot {token}", "User-Agent": _UA},
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        return json.loads(resp.read())
+
+
+def format_message(msg: dict) -> str:
+    """Render one raw message as the human-readable line the LLM sees."""
+    author = msg.get("author", {}).get("username", "unknown")
+    voice_text = _transcribe_voice_attachment(msg)
+    if voice_text is not None:
+        return f"{author} [voice]: {voice_text}"
+    content = (msg.get("content") or "").strip() or "(no text)"
+    return f"{author}: {content}"
+
+
 def read_discord_messages(limit: int = 10) -> str:
     """Read the most recent messages from the Discord channel.
 
@@ -119,28 +155,11 @@ def read_discord_messages(limit: int = 10) -> str:
     Returns:
         Messages as "author: content" lines, oldest first, or an error.
     """
-    token = os.environ.get("DISCORD_BOT_TOKEN")
-    if not token:
+    if not os.environ.get("DISCORD_BOT_TOKEN"):
         return "Discord bot is not configured — set DISCORD_BOT_TOKEN in .env."
 
     try:
-        channel_id = _resolve_channel_id()
-    except Exception as e:
-        return f"Failed to resolve channel: {e}"
-
-    n = max(1, min(100, int(limit)))
-    url = f"{_API}/channels/{channel_id}/messages?limit={n}"
-    req = urllib.request.Request(
-        url,
-        headers={
-            "Authorization": f"Bot {token}",
-            "User-Agent": _UA,
-        },
-    )
-
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            messages = json.loads(resp.read())
+        messages = fetch_raw_messages(limit=limit)
     except urllib.error.HTTPError as e:
         if e.code == 401:
             return "Discord rejected the bot token (401).  Check DISCORD_BOT_TOKEN."
@@ -159,14 +178,4 @@ def read_discord_messages(limit: int = 10) -> str:
         return "No messages in the channel."
 
     # Discord returns newest-first; reverse for natural reading order
-    lines = []
-    for m in reversed(messages):
-        author = m.get("author", {}).get("username", "unknown")
-        voice_text = _transcribe_voice_attachment(m)
-        if voice_text is not None:
-            # Voice message — tag it so the LLM knows it was spoken
-            lines.append(f"{author} [voice]: {voice_text}")
-        else:
-            content = (m.get("content") or "").strip() or "(no text)"
-            lines.append(f"{author}: {content}")
-    return "\n".join(lines)
+    return "\n".join(format_message(m) for m in reversed(messages))

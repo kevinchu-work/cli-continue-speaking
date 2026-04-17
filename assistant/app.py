@@ -13,6 +13,7 @@ import sounddevice as sd
 from google.genai import errors as genai_errors
 from pynput import keyboard as kb
 
+from .auto_reply import AutoReplyService
 from .config import (
     MIC_SAMPLE_RATE, MIN_RECORD_SECS, TTS_BACKENDS, SAY_VOICES, WHISPER_MODEL,
 )
@@ -30,6 +31,13 @@ class VoiceAssistant:
 
         self._audio_chunks: list = []
         self._is_recording: bool = False
+        # Set while _process is running the LLM/TTS for the user, so the
+        # auto-reply poller knows to hold off.
+        self._busy: bool = False
+        self._auto_reply = AutoReplyService(
+            llm=self._llm,
+            busy_fn=lambda: self._is_recording or self._busy,
+        )
 
         # Preload both models so the first turn runs without any fetch delay
         self._tts.preload()
@@ -55,7 +63,13 @@ class VoiceAssistant:
     def _process(self) -> None:
         """Transcribe buffered audio → LLM → speak response."""
         self._cancel.clear()
+        self._busy = True
+        try:
+            self._process_inner()
+        finally:
+            self._busy = False
 
+    def _process_inner(self) -> None:
         if not self._audio_chunks:
             return
 
@@ -133,6 +147,18 @@ class VoiceAssistant:
         state = "on" if self._settings.continue_speaking else "off"
         print(f"Continue speaking → {state}\n")
 
+    def _toggle_auto_reply(self) -> None:
+        if not AutoReplyService.available():
+            print("Auto-reply needs both DISCORD_BOT_TOKEN and "
+                  "DISCORD_WEBHOOK_URL set in .env.\n")
+            return
+        self._settings.auto_reply_enabled = not self._settings.auto_reply_enabled
+        self._settings.save()
+        if self._settings.auto_reply_enabled:
+            self._auto_reply.start()
+        else:
+            self._auto_reply.stop()
+
     # ── UI ────────────────────────────────────────────────────────────────────
 
     def _print_banner(self) -> None:
@@ -146,6 +172,8 @@ class VoiceAssistant:
         print(f"  TTS        [ctrl+t,v]    {tts_label}")
         print(f"  Speed      [ctrl+↑↓]     {self._settings.tts_speed}x")
         print(f"  Continue   [ctrl+k]      {'on' if self._settings.continue_speaking else 'off'}")
+        if AutoReplyService.available():
+            print(f"  Auto-reply [ctrl+r]      {'on' if self._settings.auto_reply_enabled else 'off'}  (Discord)")
         print()
         print("  space      start / stop recording")
         print("  esc        cancel")
@@ -168,6 +196,8 @@ class VoiceAssistant:
                 self._llm.rotate_model()
             elif getattr(key, "char", None) == "t" and ctrl_held:
                 self._rotate_tts()
+            elif getattr(key, "char", None) == "r" and ctrl_held:
+                self._toggle_auto_reply()
             elif getattr(key, "char", None) == "k" and ctrl_held:
                 self._toggle_continue_speaking()
                 # If continue speaking was just turned off mid-recording, discard and don't send
@@ -222,6 +252,9 @@ class VoiceAssistant:
         )
 
         self._print_banner()
+
+        if self._settings.auto_reply_enabled and AutoReplyService.available():
+            self._auto_reply.start()
 
         # Disable terminal echo so hotkey escape sequences (^[[1;5A etc.) don't
         # bleed into the output.  Restore unconditionally on exit.
