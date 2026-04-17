@@ -64,12 +64,16 @@ def _transcribe_voice_attachment(msg: dict) -> str | None:
         result = mlx_whisper.transcribe(tmp_path, path_or_hf_repo=WHISPER_MODEL)
         text = (result.get("text") or "").strip() or "(empty)"
     except Exception as e:
-        text = f"(transcription failed: {e})"
+        # Prefixed with ERROR so the LLM can't miss it and smooth it over.
+        text = f"ERROR transcribing voice message: {type(e).__name__}: {e}"
     finally:
         if tmp_path:
             Path(tmp_path).unlink(missing_ok=True)
 
-    _transcription_cache[msg_id] = text
+    # Only cache successful transcriptions — errors are usually transient
+    # (network, auth, CDN signature expiry) and should be retried next read.
+    if not text.startswith("ERROR"):
+        _transcription_cache[msg_id] = text
     return text
 
 
