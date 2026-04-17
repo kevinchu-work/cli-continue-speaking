@@ -78,8 +78,24 @@ Most people only need the webhook set — no need to add `DISCORD_CHANNEL_ID`.
 |---|---|
 | Post messages (webhook) | Post as a real user (only the bot/webhook identity) |
 | Read recent messages (bot) | Send DMs |
-| Read message authors + timestamps | React to or edit existing messages |
-| Up to 2000 chars per message | Read channels the bot isn't in |
+| **Auto-transcribe voice messages** | React to or edit existing messages |
+| Read message authors + timestamps | Read channels the bot isn't in |
+| Up to 2000 chars per message | |
+
+### Voice messages
+
+When `read_discord_messages` encounters a Discord voice message (the
+hold-to-record feature), it downloads the `.ogg` attachment, runs it through
+the same mlx-whisper model the mic pipeline uses, and returns it inline
+tagged as `[voice]`:
+
+```
+alice: hey — did you finish the deck?
+bob [voice]: yeah, just pushed it to the drive folder
+```
+
+Transcriptions are cached by message ID so re-reading is free.  No extra
+setup — works automatically once the bot can read the channel.
 
 For reactions, edits, or DMs, extend `bot.py` with more REST endpoints.
 For real-time events (live message notifications), you'd need a Discord

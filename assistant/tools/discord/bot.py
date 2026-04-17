@@ -2,17 +2,72 @@
 
 Unlike webhooks (write-only, single channel, no identity), a bot token gives
 the assistant a real Discord identity with channel-read permissions.
+
+Voice messages (Discord's hold-to-record feature) are auto-transcribed using
+the same mlx-whisper model the mic pipeline uses — transcriptions are cached
+by message ID so re-reads are free.
 """
 
 import json
 import os
+import tempfile
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 _UA = "DiscordBot (https://github.com/kevin/v-to-work, 0.1.0)"
 _API = "https://discord.com/api/v10"
 
+# Discord message flag bits (https://discord.com/developers/docs/resources/message)
+_FLAG_IS_VOICE_MESSAGE = 1 << 13   # 8192
+
 _cached_channel_id: str | None = None
+_transcription_cache: dict[str, str] = {}
+
+
+def _transcribe_voice_attachment(msg: dict) -> str | None:
+    """Return the Whisper transcription if msg is a voice message, else None.
+
+    Downloads the .ogg attachment to a temp file, runs mlx-whisper on it, and
+    caches the result by message ID so subsequent reads of the same message
+    don't re-transcribe.  Errors are returned as a parenthesised string rather
+    than raised, so one bad attachment doesn't sink the whole read.
+    """
+    if not (msg.get("flags", 0) & _FLAG_IS_VOICE_MESSAGE):
+        return None
+
+    msg_id = msg["id"]
+    if msg_id in _transcription_cache:
+        return _transcription_cache[msg_id]
+
+    attachments = msg.get("attachments") or []
+    if not attachments or not attachments[0].get("url"):
+        return "(voice message with no attachment)"
+
+    audio_url = attachments[0]["url"]
+    tmp_path: str | None = None
+    try:
+        with urllib.request.urlopen(audio_url, timeout=15) as resp:
+            audio_bytes = resp.read()
+        with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as tf:
+            tf.write(audio_bytes)
+            tmp_path = tf.name
+
+        # Imported lazily — mlx-whisper is already loaded by the main app, so
+        # this is just a dict lookup and the model is warm.
+        import mlx_whisper
+        from assistant.config import WHISPER_MODEL
+
+        result = mlx_whisper.transcribe(tmp_path, path_or_hf_repo=WHISPER_MODEL)
+        text = (result.get("text") or "").strip() or "(empty)"
+    except Exception as e:
+        text = f"(transcription failed: {e})"
+    finally:
+        if tmp_path:
+            Path(tmp_path).unlink(missing_ok=True)
+
+    _transcription_cache[msg_id] = text
+    return text
 
 
 def _resolve_channel_id() -> str:
@@ -100,6 +155,11 @@ def read_discord_messages(limit: int = 10) -> str:
     lines = []
     for m in reversed(messages):
         author = m.get("author", {}).get("username", "unknown")
-        content = (m.get("content") or "").strip() or "(no text)"
-        lines.append(f"{author}: {content}")
+        voice_text = _transcribe_voice_attachment(m)
+        if voice_text is not None:
+            # Voice message — tag it so the LLM knows it was spoken
+            lines.append(f"{author} [voice]: {voice_text}")
+        else:
+            content = (m.get("content") or "").strip() or "(no text)"
+            lines.append(f"{author}: {content}")
     return "\n".join(lines)
