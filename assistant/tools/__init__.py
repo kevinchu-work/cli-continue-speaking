@@ -18,6 +18,7 @@ from .core import TOOLS as _core_tools
 from .gmail import TOOLS as _gmail_tools
 from .discord import TOOLS as _discord_tools
 from .search import TOOLS as _search_tools
+from .local_files import TOOLS as _local_files_tools
 
 
 def _wrap(fn):
@@ -59,5 +60,5 @@ def _wrap(fn):
     return wrapper
 
 
-_all = _core_tools + _gmail_tools + _discord_tools + _search_tools
+_all = _core_tools + _gmail_tools + _discord_tools + _search_tools + _local_files_tools
 TOOLS = [_wrap(t) for t in _all]
