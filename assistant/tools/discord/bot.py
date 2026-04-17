@@ -47,7 +47,10 @@ def _transcribe_voice_attachment(msg: dict) -> str | None:
     audio_url = attachments[0]["url"]
     tmp_path: str | None = None
     try:
-        with urllib.request.urlopen(audio_url, timeout=15) as resp:
+        # Discord's CDN sits behind Cloudflare and 403s the default
+        # python-urllib UA (same 1010 block as the webhook endpoint).
+        audio_req = urllib.request.Request(audio_url, headers={"User-Agent": _UA})
+        with urllib.request.urlopen(audio_req, timeout=15) as resp:
             audio_bytes = resp.read()
         with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as tf:
             tf.write(audio_bytes)
